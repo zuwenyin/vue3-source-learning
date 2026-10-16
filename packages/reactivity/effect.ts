@@ -225,7 +225,7 @@ interface WatchOptions {
   immediate?: boolean;
   flush?: 'post'
 }
-function watch(source: any, callback: (newVal: any, oldVal: any) => void, options?: WatchOptions) {
+function watch(source: any, callback: (newVal: any, oldVal: any, onValidate?: (fn?: () => void) => void) => void, options?: WatchOptions) {
   let getter: () => void;
   let newValue, oldValue: any;
   if (typeof source === 'function') {
@@ -234,12 +234,18 @@ function watch(source: any, callback: (newVal: any, oldVal: any) => void, option
     getter = () => traverse(source)
   }
 
+  let clearup: () => void;
+  function onValidate(fn?: () => void) {
+    clearup = fn!
+  }
+
   const job = (fn?: () => void) => {
     // 两种调用方式等价
     console.log(watchEffectFn === fn);
     // newValue = fn!()
     newValue = watchEffectFn!()
-    callback(newValue, oldValue)
+    clearup && clearup()
+    callback(newValue, oldValue, onValidate)
     oldValue = newValue
   }
 
@@ -250,7 +256,7 @@ function watch(source: any, callback: (newVal: any, oldVal: any) => void, option
         const p = Promise.resolve()
         p.then(() => job(fn))
       } else {
-        job()
+        job(fn)
       }
     }
   })
@@ -279,12 +285,37 @@ function traverse(obj: any, seen = new Set()) {
 // watch(obj, (newVal, oldVal) => {
 //   logger.label('info', 'watch triggered', { color: '#722ed1', text: '#722ed1' }).info(`newVal=> ${JSON.stringify(newVal)}, oldVal=> ${JSON.stringify(oldVal)}`)
 // })
-// 测试getter的watch
-watch(() => obj.foo, (newVal, oldVal) => {
-  logger.label('info', 'watch triggered', { color: '#13c2c2', text: '#13c2c2' }).info(`newVal=> ${JSON.stringify(newVal)}, oldVal=> ${JSON.stringify(oldVal)}`)
+
+// // 测试getter的watch
+// watch(() => obj.foo, (newVal, oldVal) => {
+//   logger.label('info', 'watch triggered', { color: '#13c2c2', text: '#13c2c2' }).info(`newVal=> ${JSON.stringify(newVal)}, oldVal=> ${JSON.stringify(oldVal)}`)
+// },
+//   {
+//     flush: 'post'
+//   })
+//   ; (obj.foo as number)++
+//   ; (obj.foo as number)++
+// // ; (obj.bar as number)++
+// logger.label('info', '同步代码', { color: '#b3e00dcc', text: 'b3e00dcc' }).info(`666`)
+
+// 测试watch清理过期副作用（竞态模拟）
+const getData = (time: number) => new Promise(resove => setTimeout(resove, time))
+let count = 2
+watch(obj, async (newVal, oldVal, onValidate) => {
+  let expired = false
+
+  onValidate!(() => {
+    expired = true
+  })
+
+  const currentCount = count--
+  !expired && logger.label('info', 'request start', { color: '#12e7dd', text: '#12e7dd' }).info(`请求 ${currentCount} 开始`)
+  await getData(currentCount * 1000)
+
+  !expired && logger.label('info', 'request end', { color: '#e41616', text: '#e41616' }).info(`请求 ${currentCount} 完成`)
 })
   ; (obj.foo as number)++
-  ; (obj.bar as number)++
+  ; (obj.foo as number)++
 
 function track(target: Record<string, unknown>, key: string) {
   if (!activeEffect) {
