@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev:effect": "tsc --watch -p tsconfig.json",
+    "dev": "tsc --watch -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "keywords": [],

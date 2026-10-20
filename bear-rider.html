@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>熊大骑光头强 · SVG 动画</title>
+<style>
+  *{ box-sizing: border-box; }
+  html, body{ height: 100%; }
+  body{
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 10%, #eefaff 0%, #c9e8f8 42%, #93c6e2 100%);
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  }
+  .stage{ width: min(94vw, 980px); }
+  .stage svg{
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 28px;
+    background: #bfe9fb;
+    box-shadow: 0 34px 70px -28px rgba(9, 45, 72, .6);
+  }
+  .caption{
+    margin: 16px 0 0;
+    text-align: center;
+    font-size: 14px;
+    letter-spacing: .14em;
+    color: #2c5c78;
+    opacity: .78;
+  }
+
+  /* ===================== 动画 ===================== */
+
+  /* 整体上下颠簸 */
+  .runner{ animation: runnerBob .5s ease-in-out infinite; }
+  @keyframes runnerBob{
+    0%, 100%{ transform: translateY(0); }
+    50%     { transform: translateY(-11px); }
+  }
+
+  /* 地面影子随颠簸缩放 */
+  .shadow{
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: shadowSquash .5s ease-in-out infinite;
+  }
+  @keyframes shadowSquash{
+    0%, 100%{ transform: scale(1); opacity: .25; }
+    50%     { transform: scale(.87); opacity: .16; }
+  }
+
+  /* 双腿交替摆动 */
+  .leg-inner{
+    transform-box: fill-box;
+    transform-origin: 50% 6%;
+  }
+  .leg-back  .leg-inner{ animation: legSwing .5s ease-in-out infinite; }
+  .leg-front .leg-inner{ animation: legSwing .5s ease-in-out infinite -.25s; }
+  @keyframes legSwing{
+    0%, 100%{ transform: rotate(-10deg); }
+    50%     { transform: rotate(10deg); }
+  }
+
+  /* 双手轻微晃动 */
+  .arm-inner{
+    transform-box: fill-box;
+    transform-origin: 50% 8%;
+    animation: armSwing .5s ease-in-out infinite;
+  }
+  .arm-right .arm-inner{ animation-delay: -.25s; }
+  @keyframes armSwing{
+    0%, 100%{ transform: rotate(-3.5deg); }
+    50%     { transform: rotate(3.5deg); }
+  }
+
+  /* 熊的身体随人一起摇 */
+  .bear,
+  .bear-head-bob{
+    transform-box: fill-box;
+    animation: bearBob .5s ease-in-out infinite -.11s;
+  }
+  .bear{ transform-origin: 50% 92%; }
+  .bear-head-bob{ transform-origin: 50% 96%; }
+  @keyframes bearBob{
+    0%, 100%{ transform: rotate(-2.2deg) translateY(0); }
+    50%     { transform: rotate(2.2deg) translateY(-4px); }
+  }
+
+  /* 熊脑袋左顾右盼 */
+  .bear-head{
+    transform-box: fill-box;
+    transform-origin: 50% 92%;
+    animation: headNod 2.6s ease-in-out infinite;
+  }
+  @keyframes headNod{
+    0%, 100%{ transform: rotate(-4deg); }
+    50%     { transform: rotate(4.5deg); }
+  }
+
+  /* 挥手 */
+  .wave{
+    transform-box: fill-box;
+    transform-origin: 12% 88%;
+    animation: wave .85s ease-in-out infinite;
+  }
+  @keyframes wave{
+    0%, 100%{ transform: rotate(-14deg); }
+    50%     { transform: rotate(16deg); }
+  }
+
+  /* 眨眼 */
+  .eyes{
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: blink 4.4s infinite;
+  }
+  .bear-eyes{ animation-delay: -2.1s; }
+  @keyframes blink{
+    0%, 91%, 100%{ transform: scaleY(1); }
+    94%          { transform: scaleY(.08); }
+  }
+
+  /* 太阳光晕呼吸 */
+  .sun-glow{
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: sunPulse 4.2s ease-in-out infinite;
+  }
+  @keyframes sunPulse{
+    0%, 100%{ transform: scale(1); opacity: .9; }
+    50%     { transform: scale(1.1); opacity: 1; }
+  }
+
+  /* 云朵飘浮 */
+  .cloud{ animation: cloudDrift 20s ease-in-out infinite; }
+  .cloud-2{ animation-duration: 16s; animation-direction: reverse; }
+  .cloud-3{ animation-duration: 24s; animation-delay: -4s; }
+  @keyframes cloudDrift{
+    0%, 100%{ transform: translateX(-22px); }
+    50%     { transform: translateX(26px); }
+  }
+
+  /* 背景滚动（900px 无缝循环） */
+  .tree-track { animation: scrollX 6s linear infinite; }
+  .grass-track{ animation: scrollX 4s linear infinite; }
+  @keyframes scrollX{
+    from{ transform: translateX(0); }
+    to  { transform: translateX(-900px); }
+  }
+
+  /* 速度线 */
+  .zip{ animation: zip .9s linear infinite; }
+  .z1{ animation-delay: -.1s; }
+  .z2{ animation-delay: -.45s; }
+  .z3{ animation-delay: -.7s; }
+  .z4{ animation-delay: -.3s; }
+  @keyframes zip{
+    0%  { transform: translateX(0);      opacity: 0; }
+    18% { opacity: .8; }
+    100%{ transform: translateX(-150px); opacity: 0; }
+  }
+
+  /* 脚下扬尘 */
+  .dust{
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: puff 1s ease-out infinite;
+  }
+  .d2{ animation-delay: -.33s; }
+  .d3{ animation-delay: -.66s; }
+  @keyframes puff{
+    0%  { transform: translate(0, 0) scale(.35);   opacity: .85; }
+    100%{ transform: translate(-120px, -26px) scale(1.5); opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .stage svg *{ animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <svg viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg" role="img"
+       aria-label="一只棕色大熊骑在光头伐木工肩上一起奔跑的卡通动画">
+    <defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0"   stop-color="#7fd0f2"/>
+        <stop offset="55%" stop-color="#c2ecfb"/>
+        <stop offset="100%" stop-color="#eaf9ff"/>
+      </linearGradient>
+      <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0"   stop-color="#a3e07c"/>
+        <stop offset="100%" stop-color="#57b34b"/>
+      </linearGradient>
+      <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0"   stop-color="#fff8c4" stop-opacity=".95"/>
+        <stop offset="55%" stop-color="#ffe57a" stop-opacity=".45"/>
+        <stop offset="100%" stop-color="#ffe57a" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0"   stop-color="#bd8449"/>
+        <stop offset="100%" stop-color="#8b5a2b"/>
+      </linearGradient>
+      <linearGradient id="furDark" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0"   stop-color="#a06d38"/>
+        <stop offset="100%" stop-color="#6f4520"/>
+      </linearGradient>
+      <linearGradient id="shirt" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0"   stop-color="#4d8bd3"/>
+        <stop offset="100%" stop-color="#2f66a8"/>
+      </linearGradient>
+      <linearGradient id="vest" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0"   stop-color="#ffc457"/>
+        <stop offset="100%" stop-color="#ef9b28"/>
+      </linearGradient>
+
+      <!-- 一棵树（底部原点） -->
+      <g id="tree">
+        <rect x="-9" y="-58" width="18" height="58" rx="5" fill="#8a5a33"/>
+        <rect x="-9" y="-58" width="7"  height="58" rx="4" fill="#a2703f" opacity=".75"/>
+        <circle cx="0"   cy="-100" r="54" fill="#3f9b46"/>
+        <circle cx="-30" cy="-76"  r="38" fill="#4aa94f"/>
+        <circle cx="30"  cy="-76"  r="38" fill="#4aa94f"/>
+        <circle cx="-17" cy="-124" r="34" fill="#57bb58"/>
+        <circle cx="16"  cy="-118" r="28" fill="#63c661"/>
+      </g>
+
+      <!-- 灌木（底部原点） -->
+      <g id="bush">
+        <circle cx="-24" cy="0"  r="21" fill="#3f9b46"/>
+        <circle cx="0"   cy="-9" r="27" fill="#55b757"/>
+        <circle cx="24"  cy="0"  r="21" fill="#3f9b46"/>
+      </g>
+
+      <!-- 一簇前景草（底部原点） -->
+      <g id="tuft">
+        <path d="M0 0 C-2 -14 -8 -21 -13 -25 C-4 -22 0 -14 2 0 Z" fill="#3f8f3a"/>
+        <path d="M0 0 C2 -19 7 -27 13 -31 C8 -18 6 -8 6 0 Z" fill="#4ea64a"/>
+        <path d="M0 0 C-6 -11 -15 -13 -19 -12 C-10 -8 -4 -3 -4 0 Z" fill="#357f32"/>
+      </g>
+
+      <!-- 前景一组（方便无缝复制） -->
+      <g id="foreground">
+        <use href="#tuft" transform="translate(60,510)  scale(1.2)"/>
+        <use href="#tuft" transform="translate(210,520) scale(.9)"/>
+        <use href="#tuft" transform="translate(340,508) scale(1.3)"/>
+        <use href="#tuft" transform="translate(500,522) scale(1)"/>
+        <use href="#tuft" transform="translate(640,512) scale(1.15)"/>
+        <use href="#tuft" transform="translate(790,520) scale(.95)"/>
+      </g>
+
+      <!-- 背景一组（方便无缝复制） -->
+      <g id="scenery">
+        <use href="#tree" transform="translate(60,492)  scale(1.05)"/>
+        <use href="#tree" transform="translate(300,492) scale(.8)"/>
+        <use href="#tree" transform="translate(560,492) scale(1.2)"/>
+        <use href="#tree" transform="translate(800,492) scale(.9)"/>
+        <use href="#bush" transform="translate(190,496) scale(1)"/>
+        <use href="#bush" transform="translate(430,500) scale(.85)"/>
+        <use href="#bush" transform="translate(690,496) scale(1.1)"/>
+      </g>
+    </defs>
+
+    <!-- ================= 天空 ================= -->
+    <rect width="900" height="600" fill="url(#sky)"/>
+
+    <!-- 太阳 -->
+    <circle class="sun-glow" cx="758" cy="104" r="92" fill="url(#sunGlow)"/>
+    <circle cx="758" cy="104" r="44" fill="#ffe375"/>
+    <circle cx="744" cy="92"  r="24" fill="#fff6bf" opacity=".6"/>
+
+    <!-- 云 -->
+    <g fill="#ffffff">
+      <g class="cloud cloud-1" opacity=".95">
+        <ellipse cx="168" cy="110" rx="54" ry="31"/>
+        <ellipse cx="220" cy="122" rx="38" ry="22"/>
+        <ellipse cx="124" cy="122" rx="33" ry="20"/>
+      </g>
+      <g class="cloud cloud-2" opacity=".75">
+        <ellipse cx="566" cy="88" rx="42" ry="24"/>
+        <ellipse cx="606" cy="98" rx="32" ry="19"/>
+        <ellipse cx="532" cy="98" rx="26" ry="16"/>
+      </g>
+      <g class="cloud cloud-3" opacity=".6">
+        <ellipse cx="330" cy="176" rx="36" ry="19"/>
+        <ellipse cx="366" cy="182" rx="26" ry="15"/>
+        <ellipse cx="302" cy="182" rx="22" ry="13"/>
+      </g>
+    </g>
+
+    <!-- 远山 -->
+    <path d="M-30 448 L104 328 L206 402 L300 316 L446 448 Z" fill="#a6d7b2" opacity=".8"/>
+    <path d="M462 448 L592 336 L704 408 L806 326 L930 448 Z" fill="#98cda6" opacity=".7"/>
+
+    <!-- ================= 草地 ================= -->
+    <rect y="440" width="900" height="160" fill="url(#grass)"/>
+    <path d="M0 442 Q120 428 240 442 T480 442 T720 442 T960 442 V474 H0 Z"
+          fill="#8fd671" opacity=".85"/>
+
+    <!-- 滚动的树 -->
+    <g class="tree-track">
+      <use href="#scenery"/>
+      <use href="#scenery" transform="translate(900,0)"/>
+    </g>
+
+    <!-- 脚下扬尘 -->
+    <g fill="#ffffff" opacity=".85">
+      <circle class="dust d1" cx="392" cy="484" r="9"/>
+      <circle class="dust d2" cx="352" cy="492" r="7"/>
+      <circle class="dust d3" cx="318" cy="480" r="11"/>
+    </g>
+
+    <!-- 地面影子 -->
+    <ellipse class="shadow" cx="452" cy="492" rx="94" ry="17" fill="#2f6b28" opacity=".25"/>
+
+    <!-- 速度线（在角色之后，只从背景掠过） -->
+    <g stroke="#ffffff" stroke-linecap="round" fill="none">
+      <line class="zip z1" x1="790" y1="180" x2="866" y2="180" stroke-width="8" opacity=".8"/>
+      <line class="zip z2" x1="830" y1="300" x2="896" y2="300" stroke-width="6" opacity=".65"/>
+      <line class="zip z3" x1="800" y1="416" x2="860" y2="416" stroke-width="5" opacity=".55"/>
+      <line class="zip z4" x1="860" y1="238" x2="920" y2="238" stroke-width="5" opacity=".5"/>
+    </g>
+
+    <!-- ================= 角色 ================= -->
+    <g class="runner">
+
+      <!-- 后腿 -->
+      <g class="leg leg-back" transform="translate(425,380)">
+        <g class="leg-inner">
+          <path d="M0 5 L0 86" stroke="#5e3d22" stroke-width="24" stroke-linecap="round" fill="none"/>
+          <ellipse cx="0" cy="98" rx="17" ry="12" fill="#33230f"/>
+        </g>
+      </g>
+
+      <!-- 前腿 -->
+      <g class="leg leg-front" transform="translate(475,380)">
+        <g class="leg-inner">
+          <path d="M0 5 L0 86" stroke="#9a6b41" stroke-width="24" stroke-linecap="round" fill="none"/>
+          <ellipse cx="0" cy="98" rx="17" ry="12" fill="#553c26"/>
+        </g>
+      </g>
+
+      <!-- 躯干 -->
+      <g class="torso">
+        <!-- 脖子 -->
+        <rect x="440" y="276" width="20" height="26" rx="9" fill="#eec094"/>
+        <!-- 衬衫 -->
+        <path d="M420 298 Q450 287 480 298 L484 376 Q450 388 416 376 Z" fill="url(#shirt)"/>
+        <!-- 黄色背心 -->
+        <path d="M427 302 Q450 293 473 302 L476 372 Q450 381 424 372 Z" fill="url(#vest)"/>
+        <!-- 背带 -->
+        <path d="M433 303 L437 372" stroke="#8a5a33" stroke-width="7" stroke-linecap="round" opacity=".85"/>
+        <path d="M467 303 L463 372" stroke="#8a5a33" stroke-width="7" stroke-linecap="round" opacity=".85"/>
+        <!-- 腰带 -->
+        <rect x="417" y="368" width="66" height="15" rx="7.5" fill="#7a5230"/>
+        <rect x="441" y="368" width="18" height="15" rx="4" fill="#e0a53c"/>
+        <!-- 肩袖 -->
+        <ellipse cx="420" cy="304" rx="15" ry="12" fill="url(#shirt)"/>
+        <ellipse cx="480" cy="304" rx="15" ry="12" fill="url(#shirt)"/>
+      </g>
+
+      <!-- 熊的身体（在人头之后） -->
+      <g class="bear">
+        <!-- 熊腿（垂在伐木工胸前） -->
+        <path d="M410 234 C399 264 398 298 402 326" stroke="url(#furDark)" stroke-width="26" stroke-linecap="round" fill="none"/>
+        <ellipse cx="403" cy="332" rx="17" ry="12" fill="#66421f"/>
+        <path d="M490 234 C501 264 502 298 498 326" stroke="url(#furDark)" stroke-width="26" stroke-linecap="round" fill="none"/>
+        <ellipse cx="497" cy="332" rx="17" ry="12" fill="#66421f"/>
+
+        <!-- 熊身体 -->
+        <ellipse cx="450" cy="212" rx="58" ry="48" fill="url(#fur)"/>
+        <ellipse cx="450" cy="230" rx="32" ry="28" fill="#e9cba6"/>
+        <ellipse cx="450" cy="220" rx="21" ry="16" fill="#f0d8b8" opacity=".7"/>
+
+        <!-- 熊的左臂（搭在身侧） -->
+        <path d="M400 180 C378 192 362 208 357 224" stroke="url(#furDark)" stroke-width="25" stroke-linecap="round" fill="none"/>
+        <circle cx="355" cy="231" r="14" fill="#8b5a2b"/>
+        <circle cx="355" cy="231" r="8" fill="#d9ab7b"/>
+        <path d="M347 226 q8 -4 16 0" stroke="#6b4529" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".55"/>
+      </g>
+
+      <!-- 人头与熊身之间的分离阴影 -->
+      <ellipse cx="450" cy="266" rx="35" ry="37" fill="#6b4529" opacity=".16"/>
+
+      <!-- 伐木工的头 -->
+      <g class="lj-head">
+        <ellipse cx="421" cy="266" rx="8" ry="10" fill="#f0bd90"/>
+        <ellipse cx="479" cy="266" rx="8" ry="10" fill="#f0bd90"/>
+        <ellipse cx="450" cy="262" rx="30" ry="32" fill="#f8cda3"/>
+        <ellipse cx="442" cy="238" rx="16" ry="8"  fill="#ffe3c4" opacity=".85"/>
+        <!-- 眉毛 -->
+        <path d="M431 250 Q439 243 447 250" stroke="#6b4529" stroke-width="4.2" fill="none" stroke-linecap="round"/>
+        <path d="M453 250 Q461 243 469 250" stroke="#6b4529" stroke-width="4.2" fill="none" stroke-linecap="round"/>
+        <!-- 眼睛 -->
+        <g class="eyes">
+          <ellipse cx="440" cy="265" rx="5.2" ry="6.6" fill="#3a2a1d"/>
+          <ellipse cx="460" cy="265" rx="5.2" ry="6.6" fill="#3a2a1d"/>
+          <circle cx="442" cy="263" r="1.9" fill="#ffffff"/>
+          <circle cx="462" cy="263" r="1.9" fill="#ffffff"/>
+        </g>
+        <!-- 鼻子 -->
+        <path d="M446 274 Q450 279 454 274" stroke="#d2976d" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <!-- 咬牙的嘴 -->
+        <path d="M438 285 Q450 296 462 285" stroke="#a85a45" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+        <!-- 腮红 -->
+        <ellipse cx="428" cy="279" rx="6" ry="3.6" fill="#f09a86" opacity=".5"/>
+        <ellipse cx="472" cy="279" rx="6" ry="3.6" fill="#f09a86" opacity=".5"/>
+      </g>
+
+      <!-- 伐木工的双手扶住熊脚 -->
+      <g class="arm arm-left" transform="translate(418,300)">
+        <g class="arm-inner">
+          <path d="M0 0 C-17 12 -25 28 -28 42" stroke="#d99b66" stroke-width="22" stroke-linecap="round" fill="none"/>
+          <path d="M0 0 C-17 12 -25 28 -28 42" stroke="#f8cfa5" stroke-width="17" stroke-linecap="round" fill="none"/>
+          <circle cx="-29" cy="47" r="11.5" fill="#d99b66"/>
+          <circle cx="-29" cy="47" r="8.5" fill="#f8cfa5"/>
+          <path d="M-36 43 q7 -4 14 0" stroke="#d99b66" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </g>
+      </g>
+      <g class="arm arm-right" transform="translate(482,300)">
+        <g class="arm-inner">
+          <path d="M0 0 C17 12 25 28 28 42" stroke="#d99b66" stroke-width="22" stroke-linecap="round" fill="none"/>
+          <path d="M0 0 C17 12 25 28 28 42" stroke="#f8cfa5" stroke-width="17" stroke-linecap="round" fill="none"/>
+          <circle cx="29" cy="47" r="11.5" fill="#d99b66"/>
+          <circle cx="29" cy="47" r="8.5" fill="#f8cfa5"/>
+          <path d="M22 43 q7 -4 14 0" stroke="#d99b66" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </g>
+      </g>
+
+      <!-- 熊头 -->
+      <g class="bear-head-bob">
+        <g class="bear-head">
+          <!-- 耳朵 -->
+          <circle cx="410" cy="106" r="22" fill="#8b5a2b"/>
+          <circle cx="410" cy="106" r="11.5" fill="#d9ab7b"/>
+          <circle cx="490" cy="106" r="22" fill="#8b5a2b"/>
+          <circle cx="490" cy="106" r="11.5" fill="#d9ab7b"/>
+          <!-- 脑袋 -->
+          <ellipse cx="450" cy="144" rx="48" ry="45" fill="url(#fur)"/>
+          <!-- 口鼻区 -->
+          <ellipse cx="450" cy="168" rx="27" ry="20" fill="#e9cba6"/>
+          <!-- 鼻子 -->
+          <ellipse cx="450" cy="158" rx="13" ry="9" fill="#37271b"/>
+          <ellipse cx="446" cy="155" rx="4"  ry="2.4" fill="#6b5240" opacity=".85"/>
+          <!-- 嘴 -->
+          <path d="M440 177 Q450 186 460 177" stroke="#7d5230" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+          <!-- 眼睛 -->
+          <g class="eyes bear-eyes">
+            <ellipse cx="427" cy="136" rx="8" ry="9.2" fill="#ffffff" stroke="#7a4c25" stroke-width="1.6"/>
+            <ellipse cx="473" cy="136" rx="8" ry="9.2" fill="#ffffff" stroke="#7a4c25" stroke-width="1.6"/>
+            <circle cx="428.5" cy="137" r="4.6" fill="#2f2118"/>
+            <circle cx="474.5" cy="137" r="4.6" fill="#2f2118"/>
+            <circle cx="430.5" cy="135" r="1.7" fill="#ffffff"/>
+            <circle cx="476.5" cy="135" r="1.7" fill="#ffffff"/>
+          </g>
+          <!-- 眉毛 -->
+          <path d="M415 121 Q424 115 432 120" stroke="#6b4529" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <path d="M468 120 Q476 115 485 121" stroke="#6b4529" stroke-width="4" fill="none" stroke-linecap="round"/>
+        </g>
+      </g>
+
+      <!-- 熊挥手的右臂 -->
+      <g class="wave">
+        <path d="M498 190 C524 178 542 156 552 130" stroke="url(#furDark)" stroke-width="22" stroke-linecap="round" fill="none"/>
+        <circle cx="558" cy="122" r="14" fill="#8b5a2b"/>
+        <circle cx="558" cy="122" r="8"  fill="#d9ab7b"/>
+      </g>
+
+    </g>
+
+    <!-- ================= 前景 ================= -->
+    <g class="grass-track">
+      <use href="#foreground"/>
+      <use href="#foreground" transform="translate(900,0)"/>
+    </g>
+
+  </svg>
+
+  <p class="caption">熊大骑光头强 · 纯 SVG + CSS 动画</p>
+</div>
+</body>
+</html>
