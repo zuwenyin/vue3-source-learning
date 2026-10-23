@@ -1,12 +1,7 @@
 import { logger } from "@vue3-learn/logger"
 
-const obj = { foo: 1, get bar() { return this.foo } } as const
-// 依赖桶：target -> key -> 副作用函数集合
-// 用 WeakMap 持有 target，target 被回收时其依赖也会随之释放，避免内存泄漏
-// 注意：必须在使用它的 effect() 之前声明，否则会命中 TDZ 报 "Cannot access 'bucket' before initialization"
-const bucket = new WeakMap<Record<string | symbol, unknown>, Map<string | symbol, Set<Effect>>>()
-
 const ITERATE_KEY = Symbol('ITERATE')
+const RAW = Symbol('RAW')
 const TriggerType = {
   ADD: 'ADD',
   SET: 'SET',
@@ -14,53 +9,66 @@ const TriggerType = {
 } as const
 type TTriggerType = typeof TriggerType[keyof typeof TriggerType]
 
-const p = new Proxy(obj, {
-  get(target: Record<string, unknown>, key: string, receiver: Record<string, unknown>) {
-    logger.label('info', 'Proxy::get', { color: '#722ed1', text: '#722ed1' })
-      .info(`target=> ${JSON.stringify(target)}  key=> ${key}`)
+function reactive(obj: Record<string | symbol, unknown>) {
+  return new Proxy(obj, {
+    get(target: Record<string, unknown>, key: string | symbol, receiver: Record<string, unknown>) {
+      logger.label('info', 'Proxy::get', { color: '#722ed1', text: '#722ed1' })
+        .info(`target=> ${JSON.stringify(target)}  key=> ${String(key)}`)
+      if (key === RAW) {
+        return target
+      }
+      track(target, key)
+      // 用 Reflect 保证 getter 里的 this / receiver 语义正确
+      return Reflect.get(target, key, receiver)
+    },
+    set(target: Record<string, unknown>, key: string, value: unknown, receiver) {
+      // const type: TTriggerType = Object.prototype.hasOwnProperty.call(target, key) ? 'SET' : 'ADD'
+      const type: TTriggerType = Object.hasOwn(target, key) ? 'SET' : 'ADD' // ES2022
 
-    track(target, key)
-    // 用 Reflect 保证 getter 里的 this / receiver 语义正确
-    return Reflect.get(target, key, receiver)
-  },
-  set(target: Record<string, unknown>, key: string, value: unknown) {
-    // const type: TTriggerType = Object.prototype.hasOwnProperty.call(target, key) ? 'SET' : 'ADD'
-    const type: TTriggerType = Object.hasOwn(target, key) ? 'SET' : 'ADD' // ES2022
+      logger.label('info', `Proxy::set=>【${type}】`, { color: '#f108f1', text: '#f108f1' })
+        .info(`target=> ${JSON.stringify(target)}  key=> ${String(key)} ${receiver[RAW] === target}`)
 
-    logger.label('info', `Proxy::set=>【${type}】`, { color: '#f108f1', text: '#f108f1' })
-      .info(`target=> ${JSON.stringify(target)}  key=> ${key}`)
+      const oldValue = target[key]
+      const res = Reflect.set(target, key, value, receiver)
 
-    const oldValue = target[key]
-    Reflect.set(target, key, value)
-    // 只有值真正变化时才触发更新，避免无意义的重复执行
-    if (!Object.is(oldValue, value)) {
-      trigger(target, key, type)
+      // 只有值真正变化时才触发更新，避免无意义的重复执行
+      if (receiver[RAW] === target && !Object.is(oldValue, value)) {
+        trigger(target, key, type)
+      }
+      return res
+    },
+    has(target, key) {
+      console.log('has', target, key);
+      // track(target, key)
+      // TODO：使用代理对象强制访问，暂时解决target指向问题（ get bar() { return this.foo }）
+      p[key as any]
+      return Reflect.has(target, key)
+    },
+    ownKeys(target) {
+      track(target, ITERATE_KEY)
+      return Reflect.ownKeys(target)
+    },
+    deleteProperty(target, key) {
+      logger.label('info', `Proxy::deleteProperty`, { color: '#f1082f', text: '#f1082f' })
+        .info(`target=> ${JSON.stringify(target)}  key=> ${String(key)}`)
+      const isOwnKey = Object.prototype.hasOwnProperty.call(target, key)
+      const res = Reflect.deleteProperty(target, key)
+      if (isOwnKey && res) {
+        trigger(target, key, TriggerType.DELETE)
+      }
+
+      return res
     }
-    return true
-  },
-  has(target, key) {
-    console.log('has', target, key);
-    // track(target, key)
-    // TODO：使用代理对象强制访问，暂时解决target指向问题（ get bar() { return this.foo }）
-    p[key as any]
-    return Reflect.has(target, key)
-  },
-  ownKeys(target) {
-    track(target, ITERATE_KEY)
-    return Reflect.ownKeys(target)
-  },
-  deleteProperty(target, key) {
-    logger.label('info', `Proxy::deleteProperty`, { color: '#f1082f', text: '#f1082f' })
-      .info(`target=> ${JSON.stringify(target)}  key=> ${String(key)}`)
-    const isOwnKey = Object.prototype.hasOwnProperty.call(target, key)
-    const res = Reflect.deleteProperty(target, key)
-    if (isOwnKey && res) {
-      trigger(target, key, TriggerType.DELETE)
-    }
+  })
+}
 
-    return res
-  }
-})
+const obj = { foo: 1, get bar() { return this.foo } } as const
+// 依赖桶：target -> key -> 副作用函数集合
+// 用 WeakMap 持有 target，target 被回收时其依赖也会随之释放，避免内存泄漏
+// 注意：必须在使用它的 effect() 之前声明，否则会命中 TDZ 报 "Cannot access 'bucket' before initialization"
+const bucket = new WeakMap<Record<string | symbol, unknown>, Map<string | symbol, Set<Effect>>>()
+
+const p = reactive(obj)
 
 /**
  * 当前正在执行的副作用函数，用于收集依赖
@@ -117,21 +125,46 @@ function clearup(effectFn: (() => void) & { deps: Set<() => void>[] }) {
 // console.log(bucket);
 // (p.foo as number)++
 
+// /**
+//  *  3.测试for in循环（新增、删除属性后，effect函数收集for in操作符副作用）
+//  */
+// effect(() => {
+//   logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
+//     .info(`${'副作用函数执行了'}`)
+//   for (const key in p) {
+//     console.log('key', key);
+//   }
+// })
+// console.log(bucket);
+// p.car = 6
+//   ; (p.foo as number)++
+// delete p.foo
+
+// /**
+//  *  4.测试set值为原值
+//  */
+// effect(() => {
+//   logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
+//     .info(`${'副作用函数执行了' + p.foo}`)
+// })
+//   ; (p.foo as number) = 1
+
+
 /**
- *  3.测试for in循环（新增、删除属性后，effect函数收集for in操作符副作用）
+ *  5.测试响应式对象继承，对effect收集副作用的影响
  */
+const obj2 = {}
+const proto = { bar: 1 }
+const parent = reactive(proto)
+const child = reactive(obj2)
+Object.setPrototypeOf(child, parent)
 effect(() => {
   logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
-    .info(`${'副作用函数执行了'}`)
-  for (const key in p) {
-    console.log('key', key);
-  }
+    .info(`${'副作用函数执行了'}`, child.bar)
 })
-console.log(bucket);
-p.car = 6
-  ; (p.foo as number)++
+  ; (child.bar as number) = 2
+console.log('bucket', bucket);
 
-delete p.foo
 
 
 
@@ -296,7 +329,7 @@ function trigger(target: Record<string, unknown>, key: string | symbol, type: TT
 
 
   if (effectsToRun.size) {
-    logger.label('success', 'triggered').setLevel('success').success(`key=> ${String(key)}`)
+    logger.label('success', 'triggered').setLevel('success').success(`${JSON.stringify(target)} key=> ${String(key)}`)
     effectsToRun.forEach(effect => {
       if (effect.options && effect.options.scheduler) {
         effect.options.scheduler(effect)
