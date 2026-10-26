@@ -9,7 +9,7 @@ const TriggerType = {
 } as const
 type TTriggerType = typeof TriggerType[keyof typeof TriggerType]
 
-function reactive(obj: Record<string | symbol, unknown>) {
+function createReactive(obj: Record<string | symbol, unknown>, isShallow = false) {
   return new Proxy(obj, {
     get(target: Record<string, unknown>, key: string | symbol, receiver: Record<string, unknown>) {
       logger.label('info', 'Proxy::get', { color: '#722ed1', text: '#722ed1' })
@@ -19,7 +19,16 @@ function reactive(obj: Record<string | symbol, unknown>) {
       }
       track(target, key)
       // 用 Reflect 保证 getter 里的 this / receiver 语义正确
-      return Reflect.get(target, key, receiver)
+      const res = Reflect.get(target, key, receiver)
+
+      if (isShallow) {
+        return res
+      }
+
+      if (typeof res === 'object' && res !== null) {
+        return reactive(res)
+      }
+      return res
     },
     set(target: Record<string, unknown>, key: string, value: unknown, receiver) {
       // const type: TTriggerType = Object.prototype.hasOwnProperty.call(target, key) ? 'SET' : 'ADD'
@@ -60,6 +69,14 @@ function reactive(obj: Record<string | symbol, unknown>) {
       return res
     }
   })
+}
+
+function reactive(obj: Record<string | symbol, unknown>) {
+  return createReactive(obj)
+}
+
+function shallowReactive(obj: Record<string | symbol, unknown>) {
+  return createReactive(obj, true)
 }
 
 const obj = { foo: 1, get bar() { return this.foo } } as const
@@ -150,19 +167,43 @@ function clearup(effectFn: (() => void) & { deps: Set<() => void>[] }) {
 //   ; (p.foo as number) = 1
 
 
+// /**
+//  *  5.测试响应式对象继承，对effect收集副作用的影响
+//  */
+// const obj2 = {}
+// const proto = { bar: 1 }
+// const parent = reactive(proto)
+// const child = reactive(obj2)
+// Object.setPrototypeOf(child, parent)
+// effect(() => {
+//   logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
+//     .info(`${'副作用函数执行了'}`, child.bar)
+// })
+//   ; (child.bar as number) = 2
+// console.log('bucket', bucket);
+
 /**
- *  5.测试响应式对象继承，对effect收集副作用的影响
+ *  6.测试浅响应与深响应
  */
-const obj2 = {}
-const proto = { bar: 1 }
-const parent = reactive(proto)
-const child = reactive(obj2)
-Object.setPrototypeOf(child, parent)
+// 深响应
+// const deepReactive = reactive({ foo: { bar: 1 } }) as any
+// effect(() => {
+//   logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
+//     .info(`${'【deepReactive】副作用函数执行了'}`, deepReactive.foo.bar)
+//   deepReactive.foo
+// })
+//   ; (deepReactive.foo as unknown) = { bar: 2 }
+//   ; (deepReactive.foo.bar as number) = 3
+
+// 浅响应
+const shallowReactiveObj = shallowReactive({ foo: { bar: 1 } }) as any
 effect(() => {
-  logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
-    .info(`${'副作用函数执行了'}`, child.bar)
+  logger.label('info', 'effect run', { color: '#07edf5', text: '#07edf5' })
+    .info(`${'【shallowReactive】副作用函数执行了'}`, shallowReactiveObj.foo.bar)
+  shallowReactiveObj.foo
 })
-  ; (child.bar as number) = 2
+  ; (shallowReactiveObj.foo as unknown) = { bar: 2 }
+  ; (shallowReactiveObj.foo.bar as number) = 3
 console.log('bucket', bucket);
 
 
