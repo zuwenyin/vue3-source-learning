@@ -1,6 +1,11 @@
 import { logger } from "@vue3-learn/logger"
 
+function isObject(val: unknown): val is object {
+  return typeof val === 'object' && val !== null
+}
+
 const ITERATE_KEY = Symbol('ITERATE')
+const MAP_KEY_ITERATE_KEY = Symbol('MAP_KEY_ITERATE_KEY')
 const RAW = Symbol('RAW')
 const TriggerType = {
   ADD: 'ADD',
@@ -69,7 +74,7 @@ function createReactive<T extends object>(obj: T, isShallow = false, isReadonly 
         return res
       }
 
-      if (typeof res === 'object' && res !== null) {
+      if (isObject(res)) {
         // return res
         return !isReadonly ? reactive(res) : readonly(res)
       }
@@ -131,7 +136,8 @@ const reactiveMap = new Map()
 function reactive<T extends object>(obj: T) {
   let res = reactiveMap.get(obj)
   if (!res) {
-    res = createReactive(obj)
+    const isSetOrMap = obj instanceof Set || obj instanceof Map
+    res = !isSetOrMap ? createReactive(obj) : createSetReactive(obj)
     reactiveMap.set(obj, res)
   }
   return res
@@ -379,27 +385,291 @@ function clearup(effectFn: (() => void) & { deps: Set<() => void>[] }) {
 // logger.info(`arr.indexOf(obj)=> ${arr.indexOf(obj2)}`);
 // logger.info(`arr.lastIndexOf(obj)=> ${arr.lastIndexOf(obj2)}`);
 
-// 3.4 隐式修改数组长度的原型方法
-// push影响两个独立的effect函数
-const arr6 = reactive([])
-effect(() => {
-  logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
-    .info(`${'【arr6::副作用[1]函数执行了】=>arr5.includes(6)'} ${arr6.push(1)}`)
-})
+// // 3.4 隐式修改数组长度的原型方法
+// // push影响两个独立的effect函数
+// const arr6 = reactive([])
+// effect(() => {
+//   logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
+//     .info(`${'【arr6::副作用[1]函数执行了】=>arr5.includes(6)'} ${arr6.push(1)}`)
+// })
+
+// effect(() => {
+//   logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
+//     .info(`${'【arr6::副作用[2]函数执行了】=>arr5.includes(6)'} ${arr6.push(1)}`)
+// })
+// console.log('bucket', bucket);
+
+
+/**
+ *  9.代理Set和Map
+ */
+const warp = (val: unknown, isShallow = false) => !isObject(val) || isShallow ? val : reactive(val)
+function iterationMethod(this: any) {
+  const target = this[RAW]
+  const itr = target[Symbol.iterator]()
+  track(target, ITERATE_KEY)
+
+  return {
+    // 迭代器协议
+    next() {
+      const { value, done } = itr.next()
+      return { value: value ? [warp(value[0]), warp([value[1]])] : [], done: done }
+    },
+    // 可迭代协议
+    [Symbol.iterator]() {
+      return this
+    }
+  }
+}
+function valuesIterationMethod(this: any) {
+  const target = this[RAW]
+  const itr = target.values()
+  track(target, ITERATE_KEY)
+
+  return {
+    // 迭代器协议
+    next() {
+      const { value, done } = itr.next()
+
+      return { value: warp(value), done: done }
+    },
+    // 可迭代协议
+    [Symbol.iterator]() {
+      return this
+    }
+  }
+}
+function keysIterationMethod(this: any) {
+  const target = this[RAW]
+  const itr = target.keys()
+  track(target, MAP_KEY_ITERATE_KEY)
+
+  return {
+    // 迭代器协议
+    next() {
+      const { value, done } = itr.next()
+      return { value: warp(value), done: done }
+    },
+    // 可迭代协议
+    [Symbol.iterator]() {
+      return this
+    }
+  }
+}
+
+function createMutableInstrumentations(isShallow: boolean = false, isReadonly: boolean = false) {
+  return {
+    // Set类型数据方法
+    add: function (this: any, value: any) {
+      const rawObj = this[RAW]
+      const hasKey = rawObj.has(value)
+      const res = (rawObj as Set<any>).add(value)
+      if (!hasKey) {
+        trigger(rawObj, ITERATE_KEY, 'ADD')
+      }
+      return res
+    },
+    delete: function (this: any, value: any) {
+      const rawObj = this[RAW]
+      const hasKey = rawObj.has(value)
+      const res = (rawObj as Set<any>).delete(value)
+      if (hasKey) {
+        trigger(rawObj, ITERATE_KEY, "DELETE")
+      }
+      return res
+    },
+
+    // Map类型数据方法
+    get: function (this: any, key: any) {
+      const rawObj = this[RAW]
+      const hasKey = rawObj.has(key)
+      track(rawObj, key)
+      console.log('isShallow', isShallow);
+      console.log('isReadonly', isReadonly);
+
+      if (hasKey) {
+        const res = rawObj.get(key)
+        return !isObject(res) || isShallow ? res : reactive(res)
+      }
+
+    },
+    set: function (this: any, key: any, value: any) {
+      const rawObj = this[RAW]
+      const hasKey = rawObj.has(key)
+      const oldValue = rawObj.get(key)
+      // 如果被设置的值为响应式的则取原始值（防止将响应式数据，设置到原始Map中造成污染）
+      const rawValue = value[RAW] || value
+      const res = rawObj.set(key, rawValue)
+      if (!hasKey) {
+        trigger(rawObj, key, 'ADD')
+      } else if (oldValue !== value || (oldValue === oldValue && value === value)) {
+        trigger(rawObj, key, 'SET')
+      }
+      return res
+    },
+    forEach: function (this: any, callback: (value: any, key: any, self: any) => void, thisArg: any) {
+      // const warp = (val: unknown) => !isObject(val) || isShallow ? val : reactive(val)
+      const rawObj = this[RAW]
+      track(rawObj, ITERATE_KEY)
+      rawObj.forEach((value: any, key: any, self: any) => {
+        callback.call(thisArg, warp(value, isShallow), warp(key, isShallow), self)
+      })
+    },
+    [Symbol.iterator]: iterationMethod,
+    entries: iterationMethod,
+    values: valuesIterationMethod,
+    keys: keysIterationMethod
+  } as const
+}
+type TMutableInstrumentations = ReturnType<typeof createMutableInstrumentations>
+
+// 四种组合各缓存一份，避免每次创建代理都重新生成方法表
+const deepInstrumentations: TMutableInstrumentations = createMutableInstrumentations()
+const shallowInstrumentations: TMutableInstrumentations = createMutableInstrumentations(true, false)
+const readonlyInstrumentations: TMutableInstrumentations = createMutableInstrumentations(false, true)
+const shallowReadonlyInstrumentations: TMutableInstrumentations = createMutableInstrumentations(true, true)
+
+function getMutableInstrumentations(isShallow: boolean, isReadonly: boolean) {
+  if (isShallow) {
+    return isReadonly ? shallowReadonlyInstrumentations : shallowInstrumentations
+  }
+  return isReadonly ? readonlyInstrumentations : deepInstrumentations
+}
+function createSetReactive<T extends Set<any> | Map<any, any>>(obj: T, isShallow = false, isReadonly = false) {
+  const instrumentations = getMutableInstrumentations(isShallow, isReadonly)
+  return new Proxy(obj, {
+    get(target, key, receiver) {
+      if (key === RAW) {
+        return target
+      }
+
+      if (key === 'size') {
+        track(target, ITERATE_KEY)
+        return Reflect.get(target, key, target)
+      }
+
+      if (Object.prototype.hasOwnProperty.call(instrumentations, key)) {
+        return Reflect.get(instrumentations, key, receiver)
+      }
+      return Reflect.get(target, key, receiver)
+    },
+  })
+}
+
+// // 9.1 建议响应式联系
+// const s = new Set([1, 3, 5])
+// const rs1 = reactive(s)
+// effect(() => {
+//   logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
+//     .info(`${'【rs1::副作用函数执行了】=>arr5.includes(6)'} ${rs1.size}`)
+// })
+// // console.log(rs1);
+// console.log(rs1.add(6));
+// console.log(rs1.delete(3));
+// console.log('bucket=>', bucket)
+
+// // 9.2 避免污染原始数据
+// const p = reactive(new Map([['key', 1]]))
+
+// effect(() => {
+//   console.log()
+//   logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
+//     .info(`【p.get('key')】=> ${p.get('key')}`)
+// })
+// p.set('key', 1) // 触发响应
+
+// // 原始 Map 对象 m
+// const m = new Map()
+// // p1 是 m 的代理对象
+// const p1 = reactive(m)
+// // p2 是另外一个代理对象
+// const p2 = reactive(new Map())
+// // 为 p1 设置一个键值对，值是代理对象 p2
+// p1.set('p2', p2)
+
+// effect(() => {
+//   // 注意，这里我们通过原始数据 m 访问 p2
+//    logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
+//     .info(`【m.get('p2').size】=> ${m.get('p2').size}`)
+// })
+// // 注意，这里我们通过原始数据 m 为 p2 设置一个键值对 foo --> 1
+// m.get('p2').set('foo', 1)
+
+// // 9.3 处理forEach
+// // eg1:
+// // const p = reactive(new Map([
+// //   [{ key: 1 }, { value: 2 }]
+// // ]))
+// // effect(() => {
+// //   p.forEach((value: any, key: any, map: any) => {
+// //     logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
+// //       .info(`【value, key, map】=> ${JSON.stringify(value)} ${JSON.stringify(key)} ${JSON.stringify(map)}`)
+// //   });
+// // })
+// // p.set({ key: 3 }, { value: 6 })
+
+// // eg2:
+// const key = { key: 1 }
+// const value = new Set([1, 2, 3])
+// const p = reactive(new Map([
+//   [key, value]
+// ]))
+// effect(() => {
+//   p.forEach(function (value: any, key: any, map: any) {
+//     logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
+//       .info(`【value.size, key, map】=> ${JSON.stringify(value.size)} ${JSON.stringify(key)} ${JSON.stringify(map)}`)
+//     console.log(value, key, map, this);
+
+//   }, { a: 1, b: 2 });
+// })
+// p.get(key).delete(2)
+// p.set(key, new Set([4, 5, 6, 7, 8, 9]))
+
+// 9.4 迭代器方法
+// // eg1:
+// const p = reactive(new Map([
+//   ['key1', 'value1'],
+//   ['key2', 'value2']
+// ]))
+// effect(() => {
+//   logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' }).info('for of')
+//   for (const [key, value] of p) {
+//     console.log('1111111', key, value);
+//   }
+//   for (const [key, value] of p.entries()) {
+//     console.log('2222222', key, value);
+//   }
+// })
+// p.set({ key: 3 }, { value: 6 })
+
+// // eg2: values
+// const p = reactive(new Map([
+//   ['key1', 'value1'],
+//   ['key2', 'value2']
+// ]))
+
+// effect(() => {
+// logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' }).info('for of p.values')
+//   for (const value of p.values()) {
+//     console.log(value) // key1 key2
+//   }
+// })
+// p.set('key2', 'value3') 
+
+// eg3: keys
+const p = reactive(new Map([
+  ['key1', 'value1'],
+  ['key2', 'value2']
+]))
 
 effect(() => {
-  logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' })
-  .info(`${'【arr6::副作用[2]函数执行了】=>arr5.includes(6)'} ${arr6.push(1)}`)
+  logger.label('info', 'effect run', { color: '#f59607bd', text: '#f59607bd' }).info('for of p.keys')
+  for (const value of p.keys()) {
+    console.log(value)
+  }
 })
-console.log('bucket', bucket);
-
-
-
-
-
-
-
-
+p.set('key2', 'value3') // 不会触发响应
+p.set('key3', 'value4') // 能够触发响应
 
 
 
@@ -549,8 +819,8 @@ function trigger(target: object, key: string | symbol, type: TTriggerType = 'SET
     }
   })
 
-  // 获取ownKeys（for in、删除属性）触发的副作用
-  if (type === 'ADD' || type === 'DELETE') {
+  // 获取ownKeys（for in、删除属性）触发的副作用;map类型forEach遍历时候，set也需要重新执行
+  if (type === 'ADD' || type === 'DELETE' || (type === 'SET' && Object.prototype.toString.call(target) === '[object Map]')) {
     const iterateEffects = depsMap.get(ITERATE_KEY)
     iterateEffects && iterateEffects.forEach(effect => {
       if (effect !== activeEffect) {
@@ -558,6 +828,17 @@ function trigger(target: object, key: string | symbol, type: TTriggerType = 'SET
       }
     })
   }
+
+  // 当Map类型数据新增删除时候，触发keys方法收集的MAP_KEY_ITERATE_KEY
+  if ((type === 'ADD' || type === 'DELETE') && Object.prototype.toString.call(target) === '[object Map]') {
+    const iterateEffects = depsMap.get(MAP_KEY_ITERATE_KEY)
+    iterateEffects && iterateEffects.forEach(effect => {
+      if (effect !== activeEffect) {
+        effectsToRun.add(effect)
+      }
+    })
+  }
+
 
   // 如果是数组，且为新增数组项目（则隐式影响到所有访问数组长度的副作用函数）
   if (Array.isArray(target) && type === 'ADD') {
