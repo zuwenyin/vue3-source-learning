@@ -32,8 +32,8 @@
   <h1>Logger 日志样式预览</h1>
   <p class="tip">
     按 <code>F12</code> 打开控制台，点击按钮查看对应样式的输出。<br>
-    注意本页通过 ESM 加载 tsc 编译产物 <code>index.js</code>，需先执行根目录的 <code>pnpm dev:effect</code> 或
-    <code>npx tsc -p ../../tsconfig.json</code> 生成 <code>index.js</code>。
+    注意本页通过 ESM 加载 tsc 编译产物 <code>dist/index.js</code>，需先在根目录执行 <code>pnpm dev</code> 或
+    <code>pnpm build</code> 生成 <code>dist/index.js</code>。
   </p>
 
   <h3>基础级别</h3>
@@ -62,10 +62,10 @@
   </div>
 
   <!-- 引入后自动挂载全局 Logger / log，非模块脚本里也能直接用 -->
-  <script src="./index.js" type="module"></script>
+  <script src="./dist/index.js" type="module"></script>
   <script type="module">
     // 同一个页面不同模块各建一个实例，控制台里一眼区分来源
-    import { createLogger } from './index.js'
+    import { createLogger } from './dist/index.js'
 
     const orderLog = createLogger('Order')
     const user = { id: 7, name: '张三', vip: true }

@@ -4,8 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "tsc --watch -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "dev": "tsc -b --watch",
+    "build": "tsc -b",
+    "build:all": "pnpm -r --if-present --no-bail build",
+    "build:browser": "esbuild packages/runtime-core/src/renderer.ts --bundle --format=esm --platform=browser --target=esnext --sourcemap --outfile=packages/runtime-core/dist/renderer.bundle.js",
+    "dev:browser": "esbuild packages/runtime-core/src/renderer.ts --bundle --format=esm --platform=browser --target=esnext --sourcemap --outfile=packages/runtime-core/dist/renderer.bundle.js --watch=forever --serve=5174 --servedir=.",
+    "typecheck": "tsc -b"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +24,7 @@
   "packageManager": "pnpm@12.10.1",
   "type": "module",
   "devDependencies": {
+    "esbuild": "^0.28.2",
     "typescript": "^7.0.2"
   }
 }

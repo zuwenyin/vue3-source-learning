@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // 产物落在包自己的 dist 下：packages/reactivity/dist/effect.js（每个包各自一份配置）
+    "rootDir": "./",
+    "outDir": "./dist"
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist"],
+  // 依赖 logger：tsc -b 会先构建被引用的项目，并从其 dist/*.d.ts 读取类型
+  "references": [{ "path": "../logger" }]
+}

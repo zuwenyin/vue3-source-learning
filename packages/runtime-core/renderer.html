@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>renderer test</title>
+  <!--
+    浏览器原生 ESM 无法解析裸包名（bare specifier），tsc 也不会改写 import 路径，
+    所以这里用 import map 把 "@vue3-learn/logger" 映射到 logger 包的编译产物。
+    注意：import map 必须写在任何 <script type="module"> 之前。
+  -->
+  <!-- <script type="importmap">
+  {
+    "imports": {
+      "@vue3-learn/logger": "../logger/dist/index.js",
+      "reactivity": "../reactivity/dist/index.js"
+    }
+  }
+  </script> -->
+</head>
+
+<body>
+  <div id="app">
+    <!-- <input type="text" id="inp" value="foo"> -->
+  </div>
+  <!-- <script src="./node_modules/vue/dist/vue.runtime.global.js"></script> -->
+  <!-- <script src="./dist/src/renderer.js" type="module"></script> -->
+  <script src="./dist/renderer.bundle.js" type="module"></script>
+  <!-- <script>
+    const inp = document.querySelector("#inp")
+    inp.value = 'bar'
+    console.log(inp.getAttribute('value'))
+    console.log(inp.value);
+    inp.value = 'fas'
+
+    console.log(inp.getAttribute('value'))
+    console.log(inp.value);
+
+  </script> -->
+</body>
+
+</html>

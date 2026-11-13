@@ -2,16 +2,17 @@
   "name": "@vue3-learn/logger",
   "version": "1.0.0",
   "description": "控制台彩色日志工具",
-  "main": "index.js",
-  "types": "index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./index.ts",
-      "default": "./index.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "typecheck": "tsc -p ../../tsconfig.json --noEmit"
+    "build": "tsc -b .",
+    "typecheck": "tsc -b"
   },
   "keywords": [
     "logger",
