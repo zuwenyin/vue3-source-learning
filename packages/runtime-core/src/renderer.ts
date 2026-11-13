@@ -24,6 +24,7 @@ interface VNode {
   },
   children: string | VNode[],
   el?: HTMLElement
+  key?: number | string
 }
 interface Container extends HTMLElement {
   _vnode?: VNode
@@ -106,9 +107,29 @@ function createRenderer(options: RendererOptions) {
 
       // todo 新旧子节点均为【多节点】待diff
       if (Array.isArray(n1.children)) {
-        // todo 暂时先简单实现（全量卸载和渲染）
-        n1.children.forEach(c => unmount(c))
-        n2.children.forEach(c => patch(null, c, container))
+        // // todo 暂时先简单实现（全量卸载和渲染）
+        // n1.children.forEach(c => unmount(c))
+        // n2.children.forEach(c => patch(null, c, container))
+        const oldChildren = n1.children
+        const newChildren = n2.children
+        for (let i = 0; i < newChildren.length; i++) {
+          const newVNode = newChildren[i]
+          for (let j = 0; j < oldChildren.length; j++) {
+            const oldVNode = oldChildren[j]
+            if (oldVNode.key === newVNode.key) {
+              const currentIndex = [...container.childNodes].indexOf(oldVNode.el!)
+              if (currentIndex > -1 && currentIndex !== i) {
+                console.log('移动旧dom顺序...', container.insertBefore(oldVNode.el!, container.childNodes[i]!));
+              }
+
+              console.log(`oldNodeIndex=>newNodeIndex : ${j}=>${i}`);
+
+              patch(oldVNode, newVNode, container)
+              break
+            }
+          }
+        }
+
       } else {
         // 旧的节点时【文本类型】或者【空节点】
         setElementText(container, "") // 先清空旧节点
@@ -340,45 +361,105 @@ const renderer = createRenderer({
     el.nodeValue = text
   },
 })
-const vNode: VNode = {
-  type: 'div',
-  props: {
-    id: 'container',
-    class: 'container'
-  },
-  children: [
-    {
-      type: 'h2',
-      props: { id: 'h2', class: { foo: true, bar: false } },
-      children: "渲染测试"
-    },
-    {
-      type: 'button',
-      props: {
-        id: 'btn',
-        class: ['haha heiehi', { six: true, seven: false, eight: true }],
-        disabled: false,
-        onClick: [
-          (e: Event) => {
-            console.log('btn click111', e);
-          },
-          (e: Event) => {
-            console.log('btn click222', e);
-          },
-        ],
-        onMouseDown: (e: Event) => {
-          console.log('btn mousedown', e);
-        }
-      },
-      children: '你好呀！👋'
-    }
-  ]
 
-}
-renderer.render(vNode, document.querySelector('#app')!)
+/**
+ * 1.渲染测试
+ */
+// const vNode: VNode = {
+//   type: 'div',
+//   props: {
+//     id: 'container',
+//     class: 'container'
+//   },
+//   children: [
+//     {
+//       type: 'h2',
+//       props: { id: 'h2', class: { foo: true, bar: false } },
+//       children: "渲染测试"
+//     },
+//     {
+//       type: 'button',
+//       props: {
+//         id: 'btn',
+//         class: ['haha heiehi', { six: true, seven: false, eight: true }],
+//         disabled: false,
+//         onClick: [
+//           (e: Event) => {
+//             console.log('btn click111', e);
+//           },
+//           (e: Event) => {
+//             console.log('btn click222', e);
+//           },
+//         ],
+//         onMouseDown: (e: Event) => {
+//           console.log('btn mousedown', e);
+//         }
+//       },
+//       children: '你好呀！👋'
+//     }
+//   ]
 
+// }
 
-// // render响应式更新
+// const vNode2: VNode = {
+//   type: 'div',
+//   props: {
+//     id: 'container2',
+//     class: 'container2'
+//   },
+//   children: [
+//     {
+//       type: 'h2',
+//       props: { id: 'h22', class: { foo2: true, bar2: false } },
+//       children: "渲染测试22"
+//     },
+//     {
+//       type: 'button',
+//       props: { id: 'btn2', class: ['haha2 heiehi2', { six2: true, seven2: false, eight2: true }], disabled: '' },
+//       children: '你好呀222！👋'
+//     },
+//     {
+//       type: 'main',
+//       props: { id: 'main' },
+//       children: [
+//         {
+//           type: Text,
+//           props: { id: 'text' },
+//           children: "下面有个注释和无序列表！！！"
+//         },
+//         {
+//           type: Comment,
+//           props: { id: 'comment' },
+//           children: "这是一个注释...,下面是一个无序列表"
+//         },
+//         {
+//           type: 'ul',
+//           children: [
+//             {
+//               type: Fragment,
+//               children: [
+//                 { type: 'li', props: { class: 'li1' }, children: '列表一' },
+//                 { type: 'li', props: { class: 'li2' }, children: '列表二' },
+//                 { type: 'li', props: { class: 'li3' }, children: '列表三' },
+//                 { type: 'li', props: { class: 'li4' }, children: '列表四' },
+//                 { type: 'li', props: { class: 'li5' }, children: '列表五' },
+//                 { type: 'li', props: { class: 'li6' }, children: '列表六' },
+//               ]
+//             }
+//           ]
+//         }
+
+//       ]
+//     }
+//   ]
+
+// }
+// renderer.render(vNode, document.querySelector('#app')!)
+// renderer.render(vNode2, document.querySelector('#app')!)
+
+/**
+ * 2.render响应式更新
+ */
 // const bol = ref(false)
 // effect(() => {
 //   // 创建 vnode
@@ -406,90 +487,31 @@ renderer.render(vNode, document.querySelector('#app')!)
 //   renderer.render(vnode, document.querySelector('#app')!)
 // })
 
-const vNode2: VNode = {
-  type: 'div',
-  props: {
-    id: 'container2',
-    class: 'container2'
-  },
-  children: [
-    {
-      type: 'h2',
-      props: { id: 'h22', class: { foo2: true, bar2: false } },
-      children: "渲染测试22"
-    },
-    {
-      type: 'button',
-      props: { id: 'btn2', class: ['haha2 heiehi2', { six2: true, seven2: false, eight2: true }], disabled: '' },
-      children: '你好呀222！👋'
-    },
-    {
-      type: 'main',
-      props: { id: 'main' },
-      children: [
-        {
-          type: Text,
-          props: { id: 'text' },
-          children: "下面有个注释和无序列表！！！"
-        },
-        {
-          type: Comment,
-          props: { id: 'comment' },
-          children: "这是一个注释...,下面是一个无序列表"
-        },
-        {
-          type: 'ul',
-          children: [
-            {
-              type: Fragment,
-              children: [
-                { type: 'li', props: { class: 'li1' }, children: '列表一' },
-                { type: 'li', props: { class: 'li2' }, children: '列表二' },
-                { type: 'li', props: { class: 'li3' }, children: '列表三' },
-                { type: 'li', props: { class: 'li4' }, children: '列表四' },
-                { type: 'li', props: { class: 'li5' }, children: '列表五' },
-                { type: 'li', props: { class: 'li6' }, children: '列表六' },
-              ]
-            }
-          ]
-        }
-
-      ]
-    }
-  ]
-
-}
-renderer.render(vNode2, document.querySelector('#app')!)
-// renderer.render(null, document.querySelector('#app')!)
-
-// /**
-//  * 自定义渲染器
-//  */
-// const customRenderer = createRenderer({
-//   // 创建元素
-//   createElement(tag: string) {
-//     console.log(`创建元素 ${tag}`);
-//     return { tag }
-//   },
-//   // 设置元素文字
-//   setElementText(el: Container, text: string) {
-//     console.log(`设置 ${JSON.stringify(el)} 的文本内容：${text}`)
-//     el.textContent = text
-//   },
-//   // 在父元素指定位置插入元素
-//   insert(el: HTMLElement, parent: HTMLElement, anchor: Node | null = null) {
-//     parent.children = el
-//     console.log(`将 ${JSON.stringify(el)} 添加到${JSON.stringify(parent)} 下`)
-//   }
-// })
-// const vnode = {
-//  type: 'h1',
-//  children: 'hello'
-//  }
-//  // 使用一个对象模拟挂载点
-//  const container = { type: 'root' }
-// customRenderer.render(vnode, container)
 
 /**
- * renderer完善 
+ * 3.简单diff
  */
+const oldVNode = {
+  type: 'div',
+  children: [
+    { type: 'p', children: '1', key: 1 },
+    { type: 'p', children: '2', key: 2 },
+    { type: 'p', children: 'hello', key: 3 }
+  ]
+}
+
+const newVNode = {
+  type: 'div',
+  children: [
+    { type: 'p', children: 'world', key: 3 },
+    { type: 'p', children: '1', key: 1 },
+    { type: 'p', children: '2', key: 2 }
+  ]
+}
+
+// 首次挂载
+renderer.render(oldVNode, document.querySelector('#app')!)
+setTimeout(() => {
+  // 1 秒钟后更新
+  renderer.render(newVNode, document.querySelector('#app')!)
+}, 3000);
