@@ -112,21 +112,50 @@ function createRenderer(options: RendererOptions) {
         // n2.children.forEach(c => patch(null, c, container))
         const oldChildren = n1.children
         const newChildren = n2.children
+        let lastIndex = 0
         for (let i = 0; i < newChildren.length; i++) {
           const newVNode = newChildren[i]
-          for (let j = 0; j < oldChildren.length; j++) {
+          let find = false
+          let j = 0
+          for (j; j < oldChildren.length; j++) {
             const oldVNode = oldChildren[j]
+
             if (oldVNode.key === newVNode.key) {
-              const currentIndex = [...container.childNodes].indexOf(oldVNode.el!)
-              if (currentIndex > -1 && currentIndex !== i) {
-                console.log('移动旧dom顺序...', container.insertBefore(oldVNode.el!, container.childNodes[i]!));
-              }
-
-              console.log(`oldNodeIndex=>newNodeIndex : ${j}=>${i}`);
-
+              find = true
               patch(oldVNode, newVNode, container)
+              // 0、1、2
+              if (j < lastIndex) {
+                const prevVNode = newChildren[i - 1]
+                if (prevVNode) {
+                  const anchor = prevVNode.el?.nextSibling
+                  insert(newVNode.el!, container, anchor)
+                }
+              } else {
+                lastIndex = j
+              }
               break
             }
+          }
+          if (!find) {
+            console.log('add node', newVNode, i);
+            const prevVNode = newChildren[i - 1]
+            let anchor: ChildNode | null = null
+            if (prevVNode) {
+              // 存在则取下一个节点
+              anchor = prevVNode.el?.nextSibling!
+            } else {
+              anchor = container.firstChild
+            }
+            patch(null, newVNode, container, anchor!)
+          }
+        }
+
+        // 处理该删除的元素
+        for (let i = 0; i < oldChildren.length; i++) {
+          const oldVNode = oldChildren[i]
+          const has = newChildren.find(newVNode => newVNode.key === oldVNode.key)
+          if (!has) {
+            unmount(oldVNode)
           }
         }
 
@@ -173,7 +202,7 @@ function createRenderer(options: RendererOptions) {
     patchChildren(n1, n2, el)
   }
 
-  function patch(n1: VNode | null, n2: VNode, container: Container) {
+  function patch(n1: VNode | null, n2: VNode, container: Container, anchor?: Node) {
     // 更新，但是不可复用
     if (n1 && n1?.type !== n2.type) {
       unmount(n1!)
@@ -185,7 +214,7 @@ function createRenderer(options: RendererOptions) {
       // string表示渲染正常html元素
       if (!n1) {
         // 没有旧的vNode则为首次渲染
-        mountElement(n2, container)
+        mountElement(n2, container, anchor)
       } else {
         patchElement(n1, n2)
       }
@@ -231,7 +260,7 @@ function createRenderer(options: RendererOptions) {
 
   }
 
-  function mountElement(vNode: VNode, container: Container) {
+  function mountElement(vNode: VNode, container: Container, anchor?: Node) {
     const el = vNode.el = createElement(vNode.type)
     if (typeof vNode.children === 'string') {
       setElementText(el, vNode.children)
@@ -250,7 +279,7 @@ function createRenderer(options: RendererOptions) {
       }
     }
 
-    insert(el, container)
+    insert(el, container, anchor)
   }
 
   return { render }
@@ -505,7 +534,8 @@ const newVNode = {
   children: [
     { type: 'p', children: 'world', key: 3 },
     { type: 'p', children: '1', key: 1 },
-    { type: 'p', children: '2', key: 2 }
+    { type: 'p', children: '4', key: 4 },
+    // { type: 'p', children: '2', key: 2 }
   ]
 }
 
