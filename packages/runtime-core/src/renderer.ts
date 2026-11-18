@@ -105,59 +105,62 @@ function createRenderer(options: RendererOptions) {
     } else if (Array.isArray(n2.children)) {
       // 新的子节点为【多节点】
 
-      // todo 新旧子节点均为【多节点】待diff
+
       if (Array.isArray(n1.children)) {
-        // // todo 暂时先简单实现（全量卸载和渲染）
-        // n1.children.forEach(c => unmount(c))
-        // n2.children.forEach(c => patch(null, c, container))
-        const oldChildren = n1.children
-        const newChildren = n2.children
-        let lastIndex = 0
-        for (let i = 0; i < newChildren.length; i++) {
-          const newVNode = newChildren[i]
-          let find = false
-          let j = 0
-          for (j; j < oldChildren.length; j++) {
-            const oldVNode = oldChildren[j]
+        /**
+        * 方法一：简单diff
+        */
+        // const oldChildren = n1.children
+        // const newChildren = n2.children
+        // let lastIndex = 0
+        // for (let i = 0; i < newChildren.length; i++) {
+        //   const newVNode = newChildren[i]
+        //   let find = false
+        //   let j = 0
+        //   for (j; j < oldChildren.length; j++) {
+        //     const oldVNode = oldChildren[j]
 
-            if (oldVNode.key === newVNode.key) {
-              find = true
-              patch(oldVNode, newVNode, container)
-              // 0、1、2
-              if (j < lastIndex) {
-                const prevVNode = newChildren[i - 1]
-                if (prevVNode) {
-                  const anchor = prevVNode.el?.nextSibling
-                  insert(newVNode.el!, container, anchor)
-                }
-              } else {
-                lastIndex = j
-              }
-              break
-            }
-          }
-          if (!find) {
-            console.log('add node', newVNode, i);
-            const prevVNode = newChildren[i - 1]
-            let anchor: ChildNode | null = null
-            if (prevVNode) {
-              // 存在则取下一个节点
-              anchor = prevVNode.el?.nextSibling!
-            } else {
-              anchor = container.firstChild
-            }
-            patch(null, newVNode, container, anchor!)
-          }
-        }
-
-        // 处理该删除的元素
-        for (let i = 0; i < oldChildren.length; i++) {
-          const oldVNode = oldChildren[i]
-          const has = newChildren.find(newVNode => newVNode.key === oldVNode.key)
-          if (!has) {
-            unmount(oldVNode)
-          }
-        }
+        //     if (oldVNode.key === newVNode.key) {
+        //       find = true
+        //       patch(oldVNode, newVNode, container)
+        //       // 0、1、2
+        //       if (j < lastIndex) {
+        //         const prevVNode = newChildren[i - 1]
+        //         if (prevVNode) {
+        //           const anchor = prevVNode.el?.nextSibling
+        //           insert(newVNode.el!, container, anchor)
+        //         }
+        //       } else {
+        //         lastIndex = j
+        //       }
+        //       break
+        //     }
+        //   }
+        //   if (!find) {
+        //     console.log('add node', newVNode, i);
+        //     const prevVNode = newChildren[i - 1]
+        //     let anchor: ChildNode | null = null
+        //     if (prevVNode) {
+        //       // 存在则取下一个节点
+        //       anchor = prevVNode.el?.nextSibling!
+        //     } else {
+        //       anchor = container.firstChild
+        //     }
+        //     patch(null, newVNode, container, anchor!)
+        //   }
+        // }
+        // // 处理该删除的元素
+        // for (let i = 0; i < oldChildren.length; i++) {
+        //   const oldVNode = oldChildren[i]
+        //   const has = newChildren.find(newVNode => newVNode.key === oldVNode.key)
+        //   if (!has) {
+        //     unmount(oldVNode)
+        //   }
+        // }
+        /**
+         * 方法一：双端diff
+         */
+        patchKeyedChildren(n1, n2, container)
 
       } else {
         // 旧的节点时【文本类型】或者【空节点】
@@ -174,6 +177,112 @@ function createRenderer(options: RendererOptions) {
         // 旧的节点时【文本类型】或者【空节点】
         setElementText(container, "")
       }
+    }
+  }
+
+  /**
+   * 双端diff
+   * @param n1 旧的vNode
+   * @param n2 新的vNode
+   * @param container 容器dom
+   */
+  function patchKeyedChildren(n1: VNode, n2: VNode, container: HTMLElement) {
+    const oldChildren = n1.children as VNode[]
+    const newChildren = n2.children as VNode[]
+
+    let oldStartIdx = 0
+    let oldEndIdx = oldChildren.length - 1
+    let oldStartVNode = oldChildren[oldStartIdx]
+    let oldEndVNode = oldChildren[oldEndIdx]
+
+    let newStartIdx = 0
+    let newEndIdx = newChildren.length - 1
+    let newStartVNode = newChildren[newStartIdx]
+    let newEndVNode = newChildren[newEndIdx]
+    console.log('init', [...container.childNodes].map(el => el.innerText));
+
+    while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
+
+      // 按照头头、尾尾、头尾、尾头分别比较
+      if (!oldStartVNode) {
+        oldStartVNode = oldChildren[++oldStartIdx]
+      } else if (!oldEndVNode) {
+        oldEndVNode = oldChildren[--oldEndVNode]
+      } else if (oldStartVNode.key === newStartVNode.key) {
+        // 头头比较命中
+        patch(oldStartVNode, newStartVNode, container)
+
+        oldStartVNode = oldChildren[++oldStartIdx]
+        newStartVNode = newChildren[++newStartIdx]
+      } else if (oldEndVNode.key === newEndVNode.key) {
+        // 尾尾比较命中
+        patch(oldEndVNode, newEndVNode, container)
+
+        oldEndVNode = oldChildren[--oldEndIdx]
+        newEndVNode = newChildren[--newEndIdx]
+      } else if (oldStartVNode.key === newEndVNode.key) {
+        // 头尾比较命中
+        patch(oldStartVNode, newEndVNode, container)
+        // 移动真实dom
+        const anchor = oldEndVNode.el!.nextSibling
+        insert(oldStartVNode.el!, container, anchor)
+
+        oldStartVNode = oldChildren[++oldStartIdx]
+        newEndVNode = newChildren[--newEndIdx]
+      } else if (oldEndVNode.key === newStartVNode.key) {
+        // 尾头比较命中
+        patch(oldEndVNode, newStartVNode, container)
+        // 移动真实dom
+        const anchor = oldStartVNode.el!
+        insert(oldEndVNode.el!, container, anchor)
+
+        oldEndVNode = oldChildren[--oldEndIdx]
+        newStartVNode = newChildren[++newStartIdx]
+      } else {
+        // 特殊情况，上述四种比较都无法命中时
+        // 查找newStartVnode与之对应的旧vNode下标
+        const idxInOld = oldChildren.findIndex(oldVNode => oldVNode?.key === newStartVNode.key)
+        if (idxInOld > 0) {
+          const moveInVNode = oldChildren[idxInOld]
+          patch(moveInVNode, newStartVNode, container)
+          // 移动真实dom
+          const anchor = oldStartVNode.el!
+          insert(moveInVNode.el!, container, anchor)
+          // 已经被移动了，当前旧的节点置空
+          oldChildren[idxInOld] = undefined
+
+          newStartVNode = newChildren[++newStartIdx]
+        } else {
+          // 新增的节点
+          console.log(newStartVNode);
+          patch(null, newStartVNode, container, oldStartVNode.el)
+          newStartVNode = newChildren[++newStartIdx]
+        }
+      }
+
+      // 新增节点特殊情况：旧子节点索引越界，新子节点存在尚未渲染节点
+      if (oldEndIdx < oldStartIdx && newStartIdx <= newEndIdx) {
+        console.log('add');
+        console.log(newStartVNode);
+        console.log(newEndVNode);
+
+        for (let i = newStartIdx; i <= newEndIdx; i++) {
+          const anchor = oldEndVNode.el!.nextSibling!
+          // patch(null, newChildren[i], container,oldStartVNode.el) // 有bug
+          patch(null, newChildren[i], container)
+        }
+      }
+
+      // 删除节点特殊情况，新节点索引越界，旧节点尚存在未删除的节点
+      if (newEndIdx < newStartIdx && oldStartIdx <= oldEndIdx) {
+        console.log('delete');
+
+        for (let i = oldStartIdx; i <= oldEndIdx; i++) {
+          unmount(oldChildren[i])
+        }
+      }
+
+      console.log('container', [...container.childNodes].map(el => el.innerText));
     }
   }
 
@@ -518,24 +627,122 @@ const renderer = createRenderer({
 
 
 /**
- * 3.简单diff
+ * 3.diff测试用例
  */
+// // eg1:
+// const oldVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '3', key: 3 },
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '2', key: 2 }
+//   ]
+// }
+// const newVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '2', key: 2 },
+//     { type: 'p', children: '3', key: 3 },
+//   ]
+// }
+
+// // eg2: 双端比较特殊情况（第一轮比较无法命中🎯）
+// const oldVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '2', key: 2 },
+//     { type: 'p', children: '3', key: 3 },
+//     { type: 'p', children: '4', key: 4 },
+//   ]
+// }
+// const newVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '2', key: 2 },
+//     { type: 'p', children: '4', key: 4 },
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '3', key: 3 },
+//   ]
+// }
+
+// // eg3: 添加元素
+// const oldVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '2', key: 2 },
+//     { type: 'p', children: '3', key: 3 },
+//   ]
+// }
+// const newVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '4', key: 4 },
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '3', key: 3 },
+//     { type: 'p', children: '2', key: 2 },
+//   ]
+// }
+// // eg4: 添加元素（特殊情况，旧子节点索引越界）
+// const oldVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '2', key: 2 },
+//     { type: 'p', children: '3', key: 3 },
+//   ]
+// }
+// const newVNode = {
+//   type: 'div',
+//   children: [
+//     // { type: 'p', children: '4', key: 4 },
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '3', key: 3 },
+//     { type: 'p', children: '2', key: 2 },
+
+//     { type: 'p', children: '4', key: 4 },
+//     { type: 'p', children: '5', key: 5 },
+//     { type: 'p', children: '6', key: 6 },
+//   ]
+// }
+
+// // eg: 移除元素
+// const oldVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '2', key: 2 },
+//     { type: 'p', children: '3', key: 3 },
+//   ]
+// }
+// const newVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '3', key: 3 },
+//   ]
+// }
+
+// eg6: 混合测试
 const oldVNode = {
   type: 'div',
   children: [
+    { type: 'p', children: '4', key: 4 },
     { type: 'p', children: '1', key: 1 },
     { type: 'p', children: '2', key: 2 },
-    { type: 'p', children: 'hello', key: 3 }
+    { type: 'p', children: '5', key: 5 },
+    { type: 'p', children: '3', key: 3 },
   ]
 }
-
 const newVNode = {
   type: 'div',
   children: [
-    { type: 'p', children: 'world', key: 3 },
     { type: 'p', children: '1', key: 1 },
+    { type: 'p', children: '3', key: 3 },
     { type: 'p', children: '4', key: 4 },
-    // { type: 'p', children: '2', key: 2 }
+    { type: 'p', children: '6', key: 6 },
   ]
 }
 
