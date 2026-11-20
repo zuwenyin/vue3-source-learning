@@ -157,10 +157,17 @@ function createRenderer(options: RendererOptions) {
         //     unmount(oldVNode)
         //   }
         // }
+
+        // /**
+        //  * 方法二：双端diff
+        //  */
+        // patchKeyedChildren(n1, n2, container)
+
+
         /**
-         * 方法一：双端diff
+         * 方法三：快速diff
          */
-        patchKeyedChildren(n1, n2, container)
+        quickPatchKeyedChildren(n1, n2, container)
 
       } else {
         // 旧的节点时【文本类型】或者【空节点】
@@ -262,14 +269,12 @@ function createRenderer(options: RendererOptions) {
 
       // 新增节点特殊情况：旧子节点索引越界，新子节点存在尚未渲染节点
       if (oldEndIdx < oldStartIdx && newStartIdx <= newEndIdx) {
-        console.log('add');
-        console.log(newStartVNode);
-        console.log(newEndVNode);
-
         for (let i = newStartIdx; i <= newEndIdx; i++) {
-          const anchor = oldEndVNode.el!.nextSibling!
+          const nextPos = i + 1
+          // 挂载到当前节点的下一个新节点之前
+          const anchor = nextPos < newChildren.length ? newChildren[nextPos].el : null
           // patch(null, newChildren[i], container,oldStartVNode.el) // 有bug
-          patch(null, newChildren[i], container)
+          patch(null, newChildren[i], container, anchor!)
         }
       }
 
@@ -284,6 +289,270 @@ function createRenderer(options: RendererOptions) {
 
       console.log('container', [...container.childNodes].map(el => el.innerText));
     }
+  }
+
+  /**
+   * 获取数组最长递增子序列（返回值为下标）
+   * @param arr 待操作数组
+   * @returns 
+   */
+  function getSequence(arr: number[]) {
+    const p = arr.slice()
+    const result = [0]
+    let i, j, u, v, c
+    const len = arr.length
+    for (i = 0; i < len; i++) {
+      const arrI = arr[i]
+      if (arrI !== 0) {
+        j = result[result.length - 1]
+        if (arr[j] < arrI) {
+          p[i] = j
+          result.push(i)
+          continue
+        }
+        u = 0
+        v = result.length - 1
+        while (u < v) {
+          c = ((u + v) / 2) | 0
+          if (arr[result[c]] < arrI) {
+            u = c + 1
+          } else {
+            v = c
+          }
+        }
+        if (arrI < arr[result[u]]) {
+          if (u > 0) {
+            p[i] = result[u - 1]
+          }
+          result[u] = i
+        }
+      }
+    }
+    u = result.length
+    v = result[u - 1]
+    while (u-- > 0) {
+      result[u] = v
+      v = p[v]
+    }
+    return result
+  }
+
+
+  function getLIS(arr: number[]) {
+    const tails = []
+    const prev = new Array(arr.length).fill(-1)
+    const tailIndices = []
+
+    for (let i = 0; i < arr.length; i++) {
+      const num = arr[i]
+
+      // 二分查找第一个 >= num 的位置
+      let left = 0
+      let right = tails.length
+
+      while (left < right) {
+        const mid = (left + right) >> 1
+
+        if (tails[mid] < num) {
+          left = mid + 1
+        } else {
+          right = mid
+        }
+      }
+
+      // 记录当前元素的前驱索引
+      if (left > 0) {
+        prev[i] = tailIndices[left - 1]
+      }
+
+      // 更新 tails 和对应的原数组索引
+      tails[left] = num
+      tailIndices[left] = i
+    }
+
+    // 根据前驱索引还原 LIS
+    const result = []
+    let index = tailIndices[tails.length - 1]
+
+    while (index !== undefined && index !== -1) {
+      // result.push(arr[index])
+      result.push(index)
+      index = prev[index]
+    }
+
+    return result.reverse()
+  }
+
+  function getLIS2(arr: number[]) {
+    const tail: number[] = [] // 存储当前遍历到的最小数集合
+    const tailIndices = [] // tail下标
+    const prev = new Array(arr.length).fill(-1) // tail当前元素的前驱元素下标
+
+    for (let i = 0; i < arr.length; i++) {
+      let left = 0
+      let right = tail.length
+
+      const value = arr[i]
+      // 找到tail中第一个大于value的元素
+      while (left < right) {
+        let mid = (left + right) >> 1
+        if (tail[mid] < value) {
+          left = left + 1
+        } else {
+          right = mid
+        }
+      }
+      tail[left] = arr[i]
+      tailIndices[left] = i
+      if (left > 0) {
+        prev[i] = tailIndices[left - 1]
+      }
+    }
+    console.log('tail', tail);
+    console.log('tailIndices', tailIndices);
+    console.log('prev', prev);
+    // tail最后一个元素为最长递增子序列的最后一个元素
+    let idx = tailIndices[tail.length - 1]
+    const indxs: number[] = []
+    const values: number[] = []
+    while (idx > -1) {
+      indxs.push(idx)
+      values.push(arr[idx])
+      idx = prev[idx]
+    }
+
+    return {indxs:indxs.reverse(),values:values.reverse()}
+  }
+  const arr1 = [0, 8, 4, 12, 2, 10]
+  const arr2 = [2, 6, 3, 4, 1, 5]
+  console.log(`数组[${arr2}]最长递增子序列为：${getLIS2(arr2).values}\n\n\n\n\n\n\n\n\n\n`);
+
+  /**
+   * 快速diff
+   * @param n1 旧的vNode
+   * @param n2 新的vNode
+   * @param container 容器dom
+   */
+  function quickPatchKeyedChildren(n1: VNode, n2: VNode, container: HTMLElement) {
+    const oldChildren = n1.children as VNode[]
+    const newChildren = n2.children as VNode[]
+    let j = 0 // 新旧起始节点
+    let oldEndIdx = oldChildren.length - 1
+    let newEndIdx = newChildren.length - 1
+    let oldStartVNode = oldChildren[j]
+    let newStartVNode = newChildren[j]
+    let oldEndVNode = oldChildren[oldEndIdx]
+    let newEndVNode = newChildren[newEndIdx]
+
+
+    // 1.预处理（收尾双向遍历到不能复用为止）
+    // 1.1 预比较处理头部
+    while (oldStartVNode.key === newStartVNode.key) {
+      patch(oldStartVNode, newStartVNode, container)
+      j++
+      oldStartVNode = oldChildren[j]
+      newStartVNode = newChildren[j]
+    }
+
+    // 1.1 预比较处理尾部
+    while (oldEndVNode.key === newEndVNode.key) {
+      patch(oldEndVNode, newEndVNode, container)
+      oldEndVNode = oldChildren[--oldEndIdx]
+      newEndVNode = newChildren[--newEndIdx]
+    }
+
+    // 1.2 处理理想状况下的新增、删除节点（新或旧节点遍历完毕时）
+
+    // 1.2.1 旧节点越界则需要新增新节点
+    if (oldEndIdx < j && j <= newEndIdx) {
+      for (let i = j; i <= newEndIdx; i++) {
+        const nextPos = i + 1
+        const anchor = nextPos < newChildren.length ? newChildren[nextPos].el : null
+        patch(null, newChildren[i], container, anchor!)
+      }
+    }
+    // 1.2.2 新节点越界则需要删除旧节点
+    if (newEndIdx < j && j <= oldEndIdx) {
+      for (let i = j; i <= oldEndIdx; i++) {
+        unmount(oldChildren[i])
+      }
+    }
+
+    // 1.3 预处理完成且新旧节点均未遍历完成
+    const count = newEndIdx - j + 1 // 预处理后剩余的新节点数量
+    const source = new Array(count).fill(-1) // 存储当前新节点所对应的旧节点索引
+    const oldIdxMap: Record<any, string | number> = {}
+    for (let i = j; i <= newEndIdx; i++) {
+      const newKey = newChildren[i].key!
+      oldIdxMap[newKey] = i
+    }
+
+    let pos = 0
+    let patched = 0
+    let moved = false // 是否需要移动真实dom
+    for (let i = j; i <= oldEndIdx; i++) {
+      const oldVNode = oldChildren[i]
+      const oldVNodeKey = oldVNode.key!
+      const oldIdx = oldIdxMap[oldVNodeKey] as number
+      // 理想状态下，需要移动的节点都操作了，剩下的就只剩下旧节点的删除了（old:A、B、C、D new:B、D）
+      if (patched < count) {
+        if (oldIdx !== undefined) {
+          source[Number(oldIdx) - j] = i
+          patch(oldVNode, newChildren[oldIdx], container)
+          if (oldIdx < pos) {
+            moved = true
+            patched++
+          } else {
+            pos = Number(oldIdx)
+          }
+        } else {
+          // 没找到则是旧的独有删除
+          unmount(oldVNode)
+        }
+      } else {
+        unmount(oldVNode)
+      }
+    }
+    const sourceLIS = getLIS(source)
+    console.log('sourceLIS', sourceLIS);
+
+    // 1.4 处理需要移动的元素
+    if (moved) {
+      // 从j重新计算为0时，新节点最后一位下标
+      let restNewEndIdx = count - 1
+      let lisEndIdx = sourceLIS.length - 1
+
+      for (restNewEndIdx; restNewEndIdx >= 0; restNewEndIdx--) {
+
+        // -1 是因为不用再遍历
+        const currentIdx = restNewEndIdx + j
+        console.log('restNewEndIdx', restNewEndIdx, currentIdx, newChildren[currentIdx], sourceLIS[lisEndIdx]);
+
+        // console.log(restNewEndIdx, currentIdx, newChildren[currentIdx]);
+
+        // 需要挂载的新元素
+        if (source[restNewEndIdx] === -1) {
+          const nextPos = currentIdx + 1
+          const anchor = nextPos < newChildren.length ? newChildren[nextPos].el : null
+          patch(null, newChildren[currentIdx], container, anchor!)
+        } else if (sourceLIS[lisEndIdx] !== restNewEndIdx) {
+          const oldIdx = source[restNewEndIdx]
+          const nextPos = currentIdx + 1
+          console.log('ccc', currentIdx, nextPos, newChildren[nextPos]);
+          const anchor = nextPos < newChildren.length ? newChildren[nextPos].el : null
+          console.log('insert', newChildren[currentIdx], oldChildren[oldIdx].el, anchor);
+
+          insert(oldChildren[oldIdx].el!, container, anchor!)
+        } else {
+          console.log(333);
+          lisEndIdx > 0 && lisEndIdx--
+        }
+      }
+    }
+
+    console.log('source', source, sourceLIS);
+
+
   }
 
   // 更新元素
@@ -708,7 +977,7 @@ const renderer = createRenderer({
 //   ]
 // }
 
-// // eg: 移除元素
+// // eg5: 移除元素
 // const oldVNode = {
 //   type: 'div',
 //   children: [
@@ -725,15 +994,78 @@ const renderer = createRenderer({
 //   ]
 // }
 
-// eg6: 混合测试
+// // eg6: 混合测试
+// const oldVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '4', key: 4 },
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '2', key: 2 },
+//     { type: 'p', children: '5', key: 5 },
+//     { type: 'p', children: '3', key: 3 },
+//   ]
+// }
+// const newVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '3', key: 3 },
+//     { type: 'p', children: '4', key: 4 },
+//     { type: 'p', children: '6', key: 6 },
+//   ]
+// }
+
+/**
+ * 快速diff测试用例
+ */
+// // eg1: 新增节点
+// const oldVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '2', key: 2 },
+//     { type: 'p', children: '3', key: 3 },
+//   ]
+// }
+// const newVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '4', key: 4 },
+//     { type: 'p', children: '2', key: 2 },
+//     { type: 'p', children: '3', key: 3 },
+//   ]
+// }
+
+// // eg2: 删除节点
+// const oldVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '2', key: 2 },
+//     { type: 'p', children: '3', key: 3 },
+
+//   ]
+// }
+// const newVNode = {
+//   type: 'div',
+//   children: [
+//     { type: 'p', children: '1', key: 1 },
+//     { type: 'p', children: '3', key: 3 },
+//   ]
+// }
+
+// eg3: 混合测试
 const oldVNode = {
   type: 'div',
   children: [
-    { type: 'p', children: '4', key: 4 },
     { type: 'p', children: '1', key: 1 },
     { type: 'p', children: '2', key: 2 },
-    { type: 'p', children: '5', key: 5 },
     { type: 'p', children: '3', key: 3 },
+    { type: 'p', children: '4', key: 4 },
+    { type: 'p', children: '6', key: 6 },
+    { type: 'p', children: '5', key: 5 },
+
   ]
 }
 const newVNode = {
@@ -742,7 +1074,9 @@ const newVNode = {
     { type: 'p', children: '1', key: 1 },
     { type: 'p', children: '3', key: 3 },
     { type: 'p', children: '4', key: 4 },
-    { type: 'p', children: '6', key: 6 },
+    { type: 'p', children: '2', key: 2 },
+    { type: 'p', children: '7', key: 7 },
+    { type: 'p', children: '5', key: 5 },
   ]
 }
 
